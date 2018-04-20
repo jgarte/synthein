@@ -1,66 +1,39 @@
 local GameState = require("gamestates/gameState")
 local LoadGameMenu = require("gamestates/loadGameMenu")
-local Menu = require("menu")
+local Suit = require("vendor/suit")
 local NewGameMenu = require("gamestates/newGameMenu")
 
 local MainMenu = GameState()
 
-local buttons = {NewGameMenu, LoadGameMenu}
-local buttonNames = {"New Game", "Load Game"}
+local menuFont
 if love.graphics then
-	MainMenu.font = love.graphics.newFont(36)
-	MainMenu.menu = Menu.create(love.graphics.getWidth()/2, 250, 5, buttonNames)
-else
-	MainMenu.menu = Menu.create(0, 0, 5, buttonNames)
+	menuFont = love.graphics.newFont(36)
 end
 
 function MainMenu.update(dt)
-	MainMenu.menu:update(dt)
+	Suit.layout:reset(love.graphics.getWidth()/2 - 450/2, 250)
+	Suit.layout:padding(25, 25)
+	button = Suit.Button("New Game", Suit.layout:row(450, 50))
+	if button.hit then
+			MainMenu.stackQueue:push(NewGameMenu)
+	end
+	if Suit.Button("Load Game", Suit.layout:row(450, 50)).hit then
+			MainMenu.stackQueue:push(LoadGameMenu)
+	end
 end
 
 function MainMenu.draw()
 	local screen_width = love.graphics.getWidth()
 	local previousFont = love.graphics.getFont()
-	love.graphics.setFont(MainMenu.font)
+	love.graphics.setFont(menuFont)
 	love.graphics.print("SYNTHEIN", (screen_width - 200)/2 + 10, 175 , 0, 1, 1, 0, 0, 0, 0)
-	MainMenu.menu:draw()
 	love.graphics.setFont(previousFont)
+
+	Suit.draw()
 end
 
 function MainMenu.keypressed(key)
-	if key == "escape" then
-		love.event.quit()
-	end
-
-	local button = MainMenu.menu:keypressed(key)
-	for i, name in ipairs(buttonNames) do
-		if button == name then
-			MainMenu.stackQueue:push(buttons[i])
-		end
-	end
-end
-
-function MainMenu.mousepressed(x, y, mouseButton)
-	if mouseButton == 1 then
-		local button = MainMenu.menu:pressed(x, y)
-		for i, name in ipairs(buttonNames) do
-			if button == name then
-				MainMenu.stackQueue:push(buttons[i])
-			end
-		end
-	end
-end
-
-function MainMenu.resize(w, h)
-	MainMenu.menu:resize(w, h)
-end
-
-function MainMenu.mousemoved(x, y)
-	MainMenu.menu:mousemoved(x, y)
-end
-
-function MainMenu.wheelmoved(x, y)
-	MainMenu.menu:wheelmoved(x, y)
+	if key == "escape" then love.event.quit() end
 end
 
 return MainMenu
