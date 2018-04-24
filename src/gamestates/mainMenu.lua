@@ -13,11 +13,10 @@ end
 function MainMenu.update(dt)
 	Suit.layout:reset(love.graphics.getWidth()/2 - 450/2, 250)
 	Suit.layout:padding(25, 25)
-	button = Suit.Button("New Game", Suit.layout:row(450, 50))
-	if button.hit then
+	if Suit.Button("New Game", Suit.layout:row(450, 50)).hit then
 			MainMenu.stackQueue:push(NewGameMenu)
 	end
-	if Suit.Button("Load Game", Suit.layout:row(450, 50)).hit then
+	if Suit.Button("Load Game", Suit.layout:row()).hit then
 			MainMenu.stackQueue:push(LoadGameMenu)
 	end
 end

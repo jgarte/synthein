@@ -4,7 +4,7 @@ local SceneParser = require("sceneParser")
 local Screen = require("screen")
 local Utf8 = require("utf8")
 local Util = require("util")
-local Menu = require("menu")
+local Suit = require("vendor/suit")
 
 local GameState = require("gamestates/gameState")
 local InGame = GameState()
@@ -15,17 +15,13 @@ local eventTime = 0
 local second = 0
 
 local menuOpen = false
-local pauseMenu = {}
-pauseMenu.buttons = {"Save", "Main Menu", "Quit"}
+local saveMenuOpen = false
+local saveName = {text = ""}
 
-local menu
+local menuFont
 if love.graphics then
-	pauseMenu.font = love.graphics.newFont(18)
-	menu = Menu.create(love.graphics.getWidth() / 2, 225, 5, pauseMenu.buttons)
+	menuFont = love.graphics.newFont(18)
 end
-
-local typingSaveName = false
-local saveName = ""
 
 local world, players
 function InGame.load(...)
@@ -40,35 +36,23 @@ function InGame.resize(w, h)
 end
 
 function InGame.textinput(key)
-	if typingSaveName then
-		if key:match("^%w$") then
-			saveName = saveName .. key
-		end
+	if saveMenuOpen then
+		Suit.textinput(key)
 	end
 end
 
 function InGame.keypressed(key)
 	if key == "f12" then debugmode = not debugmode end
 
-	if typingSaveName then
-		if key == "backspace" then
-			-- The string is utf-8 encoded, so the last character of the string
-			-- could be multiple bytes.
-			local byteoffset = Utf8.offset(saveName, -1)
-			if byteoffset then
-				saveName = saveName:sub(1, byteoffset - 1)
-			end
-		elseif key == "return" then
-			typingSaveName = false
-		elseif key == "escape" then
-			saveName = ""
-			typingSaveName = false
-		end
-	else
-		for _, player in ipairs(players) do
-			player:buttonpressed(love.keyboard, key)
-		end
+	if saveMenuOpen then
+		Suit.keypressed(key)
+	end
 
+	for _, player in ipairs(players) do
+		player:buttonpressed(love.keyboard, key)
+	end
+
+	if not saveMenuOpen then
 		if key == "p" or key == "pause" then
 			paused = not paused
 		end
@@ -82,35 +66,14 @@ function InGame.keypressed(key)
 end
 
 function InGame.keyreleased(key)
-	if not typingSaveName then
-		for _, player in ipairs(players) do
-			player:buttonreleased(love.keyboard, key)
-		end
+	for _, player in ipairs(players) do
+		player:buttonreleased(love.keyboard, key)
 	end
 end
 
 function InGame.mousepressed(x, y, button)
-	if not typingSaveName then
-		for _, player in ipairs(players) do
-			player:buttonpressed(love.mouse, button)
-		end
-	end
-
-	if menuOpen then
-		if button == 1 then
-			local index = menu:getButtonAt(x, y)
-			local selection = pauseMenu.buttons[index]
-
-			if selection == "Save" then
-				typingSaveName = true
-			elseif selection == "Main Menu" then
-				menuOpen = false
-				Screen.clearCameras()
-				InGame.stackQueue:pop()
-			elseif selection == "Quit" then
-				love.event.quit()
-			end
-		end
+	for _, player in ipairs(players) do
+		player:buttonpressed(love.mouse, button)
 	end
 
 	if debugmode then
@@ -154,19 +117,51 @@ function InGame.update(dt)
 	local openMenu, closeMenu = false, false
 	-- Send input to the players.
 	for _, player in ipairs(players) do
-		openMenu  = openMenu  or player.openMenu
-		player.openMenu  = false
+		player:handleInput()
+
+		openMenu = openMenu or player.openMenu
+		player.openMenu = false
 		closeMenu = closeMenu or player.closeMenu
 		player.closeMenu = false
 		player.menuOpen = menuOpen
-
-		player:handleInput()
 	end
 
 	if closeMenu then
 		menuOpen = false
+		saveMenuOpen = false
+		saveName.text = ""
 	elseif openMenu then
 		menuOpen = true
+	end
+
+	local screenWidth = love.graphics and love.graphics.getWidth() or 0
+	if menuOpen and not saveMenuOpen then
+		Suit.layout:reset(screenWidth/2 - 450/2, 225)
+		Suit.layout:padding(0, 25)
+		if Suit.Button("Save", Suit.layout:row(450, 50)).hit then
+			saveMenuOpen = true
+		end
+		if Suit.Button("Main Menu", Suit.layout:row()).hit then
+			menuOpen = false
+			Screen.clearCameras()
+			InGame.stackQueue:pop()
+		end
+		if Suit.Button("Quit", Suit.layout:row()).hit then
+			love.event.quit()
+		end
+	elseif saveMenuOpen then
+		Suit.Label("Type a name to use for your save, then press enter:", screenWidth/2 - 200/2, 200, 200, 30)
+		Suit.Input(saveName, screenWidth/2 - 200/2, 240, 200, 30)
+		if Suit.Button("Save", screenWidth/2 - 70/2, 280, 70, 30).hit then
+			local ok, message = Gamesave.save(saveName.text, world)
+			if not ok then
+				print("Failed to save the game: " .. message)
+			end
+
+			menuOpen = false
+			saveMenuOpen = false
+			saveName.text = ""
+		end
 	end
 
 	if not (paused or menuOpen) then
@@ -224,16 +219,6 @@ function InGame.update(dt)
 		end
 	end
 
-	-- Save the game.
-	if not typingSaveName and #saveName > 0 then
-		local ok, message = Gamesave.save(saveName, world)
-		if not ok then
-			print("Failed to save the game: " .. message)
-		end
-
-		saveName = ""
-	end
-
 	if debugmode then Debug.update(dt) end
 end
 
@@ -248,13 +233,8 @@ function InGame.draw()
 	if paused then
 		love.graphics.print("Paused", screen_width/2-24, 30)
 	end
-	if menuOpen then
-		menu:draw()
-	end
-	if typingSaveName then
-		love.graphics.print("Type a name to use for your save, then press enter:", screen_width/2-150, 60)
-		love.graphics.print(saveName, screen_width/2-150, 90)
-	end
+
+	Suit.draw()
 
 	-- Print debug info.
 	if debugmode then Debug.draw() end
